@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tools Gambar - Kompres, Resize, Convert, Gratis</title>
+<meta name="description" content="Tools gambar gratis di browser: kompres, resize, convert, crop, hapus background, pas foto, QR code, dan lainnya. File tidak pernah keluar dari perangkatmu.">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+  <h1>Tools Gambar</h1>
+  <p class="tagline">Kompres, resize, convert, dan lainnya, gratis di browser. File tidak pernah keluar dari perangkatmu.</p>
+</header>
+
+<main>
+  <section class="card" id="uploadCard">
+    <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Pilih gambar">
+      <div class="dz-icon">&#128444;</div>
+      <p class="dz-title">Pilih gambar atau tarik gambar ke sini</p>
+      <p class="dz-sub">Bisa banyak file sekaligus. JPG, PNG, WebP, AVIF, GIF, BMP, HEIC, SVG.</p>
+      <button type="button" class="btn btn-primary" id="btnPick">Pilih Gambar</button>
+      <input type="file" id="fileInput" accept="image/*,.heic,.heif,.svg" multiple hidden>
+    </div>
+    <div id="fileList" class="file-list"></div>
+  </section>
+
+  <section class="card" id="previewCard">
+    <h2>Pratinjau</h2>
+    <p class="hint" id="noImageHint">Belum ada gambar. Pilih gambar dulu di atas.</p>
+    <div class="preview-wrap" id="previewWrap" hidden>
+      <canvas id="previewCanvas"></canvas>
+      <div id="overlayLayer" class="overlay-layer" hidden></div>
+    </div>
+    <p class="img-info" id="imgInfo"></p>
+    <div class="row wrap gap">
+      <button type="button" class="btn" id="btnReset">Kembalikan ke Asli</button>
+      <label class="inline-label">Format download
+        <select id="dlFormat">
+          <option value="png">PNG</option>
+          <option value="jpeg">JPG</option>
+          <option value="webp">WebP</option>
+        </select>
+      </label>
+      <label class="inline-label">Kualitas
+        <input type="range" id="dlQuality" min="10" max="100" value="92">
+        <span id="dlQualityVal">92</span>
+      </label>
+      <button type="button" class="btn btn-primary" id="btnDownload">Download Hasil</button>
+      <button type="button" class="btn" id="btnDownloadAll">Download Semua (ZIP)</button>
+    </div>
+    <p class="hint">Download Semua (ZIP) memakai tool yang sedang aktif untuk semua gambar, khusus tool kompres, resize, convert, watermark, dan hapus metadata.</p>
+  </section>
+
+  <section class="card">
+    <h2>Pilih Tool</h2>
+    <div class="tool-grid" id="toolGrid">
+      <button type="button" class="tool-btn" data-tool="compress">Kompres</button>
+      <button type="button" class="tool-btn" data-tool="resize">Resize</button>
+      <button type="button" class="tool-btn" data-tool="upscale">Upscale</button>
+      <button type="button" class="tool-btn" data-tool="convert">Convert</button>
+      <button type="button" class="tool-btn" data-tool="svg">SVG ke PNG</button>
+      <button type="button" class="tool-btn" data-tool="crop">Crop</button>
+      <button type="button" class="tool-btn" data-tool="rotate">Rotate</button>
+      <button type="button" class="tool-btn" data-tool="watermark">Watermark</button>
+      <button type="button" class="tool-btn" data-tool="sensor">Sensor</button>
+      <button type="button" class="tool-btn" data-tool="bgremove">Hapus Background</button>
+      <button type="button" class="tool-btn" data-tool="heic">HEIC ke JPG</button>
+      <button type="button" class="tool-btn" data-tool="eps">EPS ke PNG</button>
+      <button type="button" class="tool-btn" data-tool="photopea">Edit di Photopea</button>
+      <button type="button" class="tool-btn" data-tool="pasfoto">Pas Foto</button>
+      <button type="button" class="tool-btn" data-tool="bgfoto">Ganti Background Pas Foto</button>
+      <button type="button" class="tool-btn" data-tool="qr">QR Code</button>
+      <button type="button" class="tool-btn" data-tool="merge">Gabung Gambar</button>
+      <button type="button" class="tool-btn" data-tool="sosmed">Ukuran Sosmed</button>
+      <button type="button" class="tool-btn" data-tool="metadata">Hapus Metadata</button>
+      <button type="button" class="tool-btn" data-tool="favicon">Favicon</button>
+      <button type="button" class="tool-btn" data-tool="signature">Tanda Tangan Transparan</button>
+      <button type="button" class="tool-btn" data-tool="a4">Laporan Foto A4</button>
+    </div>
+  </section>
+
+  <div id="panels">
+    <section class="card tool-panel" id="panel-compress" hidden>
+      <h3>Kompres Gambar</h3>
+      <p class="hint">Buat ukuran file lebih kecil. Untuk JPG dan WebP, kualitas menentukan ukuran. PNG tidak memakai kualitas.</p>
+      <label>Kualitas <span id="cmpQualityVal">85</span>
+        <input type="range" id="cmpQuality" min="10" max="100" value="85">
+      </label>
+      <label>Format
+        <select id="cmpFormat">
+          <option value="jpeg">JPG</option>
+          <option value="webp">WebP</option>
+          <option value="png">PNG</option>
+        </select>
+      </label>
+      <label>Target ukuran (KB, kosongkan kalau tidak pakai)
+        <input type="number" id="cmpTarget" min="10" placeholder="contoh: 200">
+      </label>
+      <p class="hint" id="cmpEstimate"></p>
+      <button type="button" class="btn btn-primary" id="cmpApply">Terapkan Kompres</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-resize" hidden>
+      <h3>Resize Gambar</h3>
+      <div class="row wrap gap">
+        <label>Lebar (px) <input type="number" id="rsWidth" min="1"></label>
+        <label>Tinggi (px) <input type="number" id="rsHeight" min="1"></label>
+        <label class="check"><input type="checkbox" id="rsLock" checked> Kunci aspek rasio</label>
+      </div>
+      <div class="row wrap gap">
+        <label>Atau persen <input type="number" id="rsPercent" min="1" max="500" value="50"> %</label>
+        <button type="button" class="btn" id="rsApplyPercent">Pakai Persen</button>
+      </div>
+      <button type="button" class="btn btn-primary" id="rsApply">Terapkan Resize</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-convert" hidden>
+      <h3>Convert Gambar</h3>
+      <p class="hint">Ubah format gambar aktif. Input yang didukung browser: JPG, PNG, WebP, AVIF, GIF, BMP, dan SVG (SVG dirasterisasi dulu ke ukuran 1024 px).</p>
+      <label>Format output
+        <select id="cvFormat">
+          <option value="jpeg">JPG</option>
+          <option value="png">PNG</option>
+          <option value="webp">WebP</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-primary" id="cvApply">Terapkan Convert</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-crop" hidden>
+      <h3>Crop Gambar</h3>
+      <p class="hint">Seret kotak di atas gambar pratinjau untuk memilih area. Seret sudut untuk mengubah ukuran, seret tengah untuk memindah.</p>
+      <div class="row wrap gap">
+        <span>Rasio:</span>
+        <button type="button" class="btn btn-small ratio-btn" data-ratio="">Bebas</button>
+        <button type="button" class="btn btn-small ratio-btn" data-ratio="1">1:1</button>
+        <button type="button" class="btn btn-small ratio-btn" data-ratio="1.3333">4:3</button>
+        <button type="button" class="btn btn-small ratio-btn" data-ratio="1.7778">16:9</button>
+      </div>
+      <div class="row wrap gap">
+        <button type="button" class="btn btn-primary" id="cropApply">Terapkan Crop</button>
+        <button type="button" class="btn" id="cropClear">Hapus Kotak</button>
+      </div>
+    </section>
+
+    <section class="card tool-panel" id="panel-rotate" hidden>
+      <h3>Rotate dan Cermin</h3>
+      <div class="row wrap gap">
+        <button type="button" class="btn" id="rot90">Putar 90&deg;</button>
+        <button type="button" class="btn" id="rot180">Putar 180&deg;</button>
+        <button type="button" class="btn" id="rot270">Putar 270&deg;</button>
+        <button type="button" class="btn" id="flipH">Cermin Horizontal</button>
+        <button type="button" class="btn" id="flipV">Cermin Vertikal</button>
+      </div>
+      <p class="hint">Perubahan langsung diterapkan ke gambar aktif.</p>
+    </section>
+
+    <section class="card tool-panel" id="panel-watermark" hidden>
+      <h3>Watermark</h3>
+      <label>Teks watermark <input type="text" id="wmText" value="Tools Gambar" maxlength="60"></label>
+      <div class="row wrap gap">
+        <label>Posisi
+          <select id="wmPos">
+            <option value="br">Kanan bawah</option>
+            <option value="bl">Kiri bawah</option>
+            <option value="tr">Kanan atas</option>
+            <option value="tl">Kiri atas</option>
+            <option value="center">Tengah</option>
+          </select>
+        </label>
+        <label>Ukuran <input type="range" id="wmSize" min="12" max="120" value="36"> <span id="wmSizeVal">36</span></label>
+        <label>Opacity <input type="range" id="wmOpacity" min="10" max="100" value="60"> <span id="wmOpacityVal">60%</span></label>
+        <label>Warna <input type="color" id="wmColor" value="#ffffff"></label>
+      </div>
+      <button type="button" class="btn btn-primary" id="wmApply">Terapkan Watermark</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-sensor" hidden>
+      <h3>Sensor Gambar</h3>
+      <p class="hint">Seret kotak di atas gambar pratinjau pada area yang mau disensor. Cocok untuk nomor KTP, alamat, dan wajah.</p>
+      <label>Mode sensor
+        <select id="snMode">
+          <option value="black">Kotak hitam</option>
+          <option value="pixel">Pixelate</option>
+          <option value="blur">Blur</option>
+        </select>
+      </label>
+      <p class="hint" id="snCount">Belum ada kotak sensor.</p>
+      <div class="row wrap gap">
+        <button type="button" class="btn btn-primary" id="snApply">Terapkan Sensor</button>
+        <button type="button" class="btn" id="snClear">Hapus Semua Kotak</button>
+      </div>
+    </section>
+
+    <section class="card tool-panel" id="panel-bgremove" hidden>
+      <h3>Hapus Background</h3>
+      <p class="hint">Menghapus background foto dengan AI yang jalan di perangkatmu. Pertama kali memakai tool ini, model AI sekitar 40 MB akan diunduh dan disimpan di browser, jadi butuh internet dan sedikit waktu. Setelah itu prosesnya cepat dan tidak perlu upload foto ke mana pun. Hasilnya PNG transparan.</p>
+      <button type="button" class="btn btn-primary" id="bgApply">Hapus Background</button>
+      <p class="hint" id="bgStatus"></p>
+    </section>
+
+    <section class="card tool-panel" id="panel-heic" hidden>
+      <h3>HEIC ke JPG</h3>
+      <p class="hint">Ubah foto HEIC dari iPhone menjadi JPG yang bisa dibuka di mana saja. Kalau file yang dipilih bukan HEIC, tool ini akan memberi tahu.</p>
+      <label>Pilih file HEIC <input type="file" id="heicInput" accept=".heic,.heif,image/heic,image/heif"></label>
+      <button type="button" class="btn btn-primary" id="heicConvert">Convert ke JPG</button>
+      <p class="hint" id="heicStatus"></p>
+    </section>
+
+    <section class="card tool-panel" id="panel-pasfoto" hidden>
+      <h3>Pas Foto</h3>
+      <p class="hint">Crop gambar ke ukuran pas foto pada 300 dpi. Kalau gambar punya latar transparan (misalnya habis hapus background), warna latar di bawah akan terlihat.</p>
+      <label>Ukuran
+        <select id="pfSize">
+          <option value="2x3">2x3 cm (236 x 354 px)</option>
+          <option value="3x4">3x4 cm (354 x 472 px)</option>
+          <option value="4x6" selected>4x6 cm (472 x 709 px)</option>
+        </select>
+      </label>
+      <p>Warna latar:</p>
+      <div class="row wrap gap" id="pfBgRow">
+        <button type="button" class="btn btn-small bg-swatch" data-bg="#d32f2f" data-group="pf">Merah</button>
+        <button type="button" class="btn btn-small bg-swatch" data-bg="#1a3a8f" data-group="pf">Biru</button>
+        <button type="button" class="btn btn-small bg-swatch" data-bg="#ffffff" data-group="pf">Putih</button>
+        <label>Custom <input type="color" id="pfCustom" value="#d32f2f"></label>
+      </div>
+      <div class="row wrap gap">
+        <button type="button" class="btn btn-primary" id="pfApply">Buat Pas Foto</button>
+        <button type="button" class="btn" id="pfSheet">Lembar 4R (8 Foto Campuran)</button>
+        <button type="button" class="btn" id="pfSheetFull">Lembar 4R Isi Penuh</button>
+      </div>
+      <p class="hint">Lembar 4R campuran berisi 8 foto: 2 foto 4x6, 2 foto 3x4, dan 4 foto 2x3 dalam satu lembar 1200 x 1800 px siap cetak. Lembar isi penuh mengisi lembar dengan satu ukuran yang dipilih.</p>
+    </section>
+
+    <section class="card tool-panel" id="panel-bgfoto" hidden>
+      <h3>Ganti Background Pas Foto</h3>
+      <p class="hint">Tool ini menghapus background foto dengan AI dulu, lalu menaruh fotomu di atas warna solid pilihan. Cocok untuk pas foto dengan latar merah atau biru.</p>
+      <p>Warna latar:</p>
+      <div class="row wrap gap">
+        <button type="button" class="btn btn-small bg-swatch" data-bg="#d32f2f" data-group="bf">Merah</button>
+        <button type="button" class="btn btn-small bg-swatch" data-bg="#1a3a8f" data-group="bf">Biru</button>
+        <button type="button" class="btn btn-small bg-swatch" data-bg="#ffffff" data-group="bf">Putih</button>
+        <label>Custom <input type="color" id="bfCustom" value="#d32f2f"></label>
+      </div>
+      <button type="button" class="btn btn-primary" id="bfApply">Hapus Background dan Ganti Warna</button>
+      <p class="hint" id="bfStatus"></p>
+    </section>
+
+    <section class="card tool-panel" id="panel-qr" hidden>
+      <h3>QR Code Generator</h3>
+      <label>Jenis
+        <select id="qrType">
+          <option value="text">Teks / Link</option>
+          <option value="wa">WhatsApp</option>
+        </select>
+      </label>
+      <label>Isi QR <input type="text" id="qrText" placeholder="https://contoh.com" value="https://tools.atur.in"></label>
+      <label id="qrWaWrap" hidden>Nomor WhatsApp (tanpa +, contoh: 6281234567890)
+        <input type="tel" id="qrWa" placeholder="6281234567890">
+      </label>
+      <div class="row wrap gap">
+        <label>Warna QR <input type="color" id="qrDark" value="#000000"></label>
+        <label>Warna latar <input type="color" id="qrLight" value="#ffffff"></label>
+        <label>Ukuran
+          <select id="qrSize">
+            <option value="256">256 px</option>
+            <option value="512" selected>512 px</option>
+            <option value="1024">1024 px</option>
+          </select>
+        </label>
+      </div>
+      <div class="row wrap gap">
+        <button type="button" class="btn btn-primary" id="qrMake">Buat QR Code</button>
+        <button type="button" class="btn" id="qrDownload">Download PNG</button>
+      </div>
+      <div id="qrOut" class="qr-out"></div>
+    </section>
+
+    <section class="card tool-panel" id="panel-merge" hidden>
+      <h3>Gabung Gambar</h3>
+      <p class="hint">Menggabungkan semua gambar yang sudah dipilih di atas. Butuh minimal 2 gambar.</p>
+      <div class="row wrap gap">
+        <label>Arah
+          <select id="mgDir">
+            <option value="vertical">Vertikal (atas ke bawah)</option>
+            <option value="horizontal">Horizontal (kiri ke kanan)</option>
+            <option value="grid">Grid</option>
+          </select>
+        </label>
+        <label>Jarak (px) <input type="number" id="mgGap" min="0" max="100" value="10"></label>
+        <label>Warna latar <input type="color" id="mgBg" value="#ffffff"></label>
+        <label id="mgColsWrap" hidden>Kolom grid <input type="number" id="mgCols" min="2" max="6" value="2"></label>
+      </div>
+      <button type="button" class="btn btn-primary" id="mgApply">Gabungkan Gambar</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-sosmed" hidden>
+      <h3>Ukuran Sosmed</h3>
+      <p class="hint">Pilih preset, lalu terapkan. Mode isi penuh memotong tengah gambar, mode muat memberi latar supaya seluruh gambar terlihat.</p>
+      <div class="row wrap gap" id="smPresets">
+        <button type="button" class="btn btn-small sm-preset" data-w="1080" data-h="1080">IG Feed 1080x1080</button>
+        <button type="button" class="btn btn-small sm-preset" data-w="1080" data-h="1920">IG Story 1080x1920</button>
+        <button type="button" class="btn btn-small sm-preset" data-w="1080" data-h="1920">TikTok 1080x1920</button>
+        <button type="button" class="btn btn-small sm-preset" data-w="1280" data-h="720">Thumbnail YouTube 1280x720</button>
+        <button type="button" class="btn btn-small sm-preset" data-w="1000" data-h="1000">Foto Produk Shopee 1000x1000</button>
+        <button type="button" class="btn btn-small sm-preset" data-w="1080" data-h="1920">Status WA 1080x1920</button>
+        <button type="button" class="btn btn-small sm-preset" data-w="1200" data-h="630">FB Post 1200x630</button>
+      </div>
+      <p class="hint" id="smSelected">Belum ada preset dipilih.</p>
+      <div class="row wrap gap">
+        <label>Mode
+          <select id="smMode">
+            <option value="cover">Isi penuh (crop tengah)</option>
+            <option value="contain">Muat (latar warna)</option>
+          </select>
+        </label>
+        <label id="smBgWrap" hidden>Warna latar <input type="color" id="smBg" value="#ffffff"></label>
+      </div>
+      <button type="button" class="btn btn-primary" id="smApply">Terapkan Ukuran</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-metadata" hidden>
+      <h3>Hapus Metadata</h3>
+      <p class="hint">Menyimpan ulang gambar lewat canvas akan membuang metadata seperti lokasi GPS, detail kamera, dan tanggal foto. Gambar tetap sama secara visual, hanya datanya yang dibersihkan.</p>
+      <button type="button" class="btn btn-primary" id="mdApply">Hapus Metadata</button>
+      <p class="hint" id="mdNote"></p>
+    </section>
+
+    <section class="card tool-panel" id="panel-favicon" hidden>
+      <h3>Favicon Generator</h3>
+      <p class="hint">Membuat favicon dari gambar aktif: PNG ukuran 16, 32, dan 48 px, plus file favicon.ico. Semua diunduh jadi satu ZIP.</p>
+      <button type="button" class="btn btn-primary" id="fvBuild">Buat Favicon</button>
+      <p class="hint" id="fvList"></p>
+      <button type="button" class="btn" id="fvDownload" disabled>Download ZIP</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-signature" hidden>
+      <h3>Tanda Tangan Transparan</h3>
+      <p class="hint">Ubah foto tanda tangan di atas kertas putih menjadi PNG transparan. Piksel yang terang jadi transparan, goresan tinta tetap terlihat. Atur threshold kalau hasilnya terlalu pudar atau masih ada sisa kertas.</p>
+      <label>Threshold <span id="sgThresholdVal">240</span>
+        <input type="range" id="sgThreshold" min="150" max="250" value="240">
+      </label>
+      <button type="button" class="btn btn-primary" id="sgApply">Buat Tanda Tangan Transparan</button>
+    </section>
+
+    <section class="card tool-panel" id="panel-a4" hidden>
+      <h3>Laporan Foto A4</h3>
+      <p class="hint">Susun foto beserta judul dan caption di halaman A4. Tombol Print akan membuka dialog cetak browser, pilih Save as PDF untuk menyimpan sebagai PDF.</p>
+      <label>Judul laporan <input type="text" id="a4Title" value="Laporan Foto" maxlength="80"></label>
+      <div id="a4Captions"></div>
+      <div class="row wrap gap">
+        <button type="button" class="btn btn-primary" id="a4Build">Susun Laporan</button>
+        <button type="button" class="btn" id="a4Print">Print / Simpan PDF</button>
+      </div>
+    </section>
+
+    <section class="card tool-panel" id="panel-upscale" hidden>
+      <h3>Upscale Gambar</h3>
+      <p class="hint">Naikkan resolusi gambar 2x atau 4x. Mode canvas cepat dan selalu jalan. Mode AI (ESRGAN) lebih tajam untuk foto, tapi perlu mengunduh model dan memori besar, jadi paling baik untuk gambar di bawah 2 MP.</p>
+      <div class="row wrap gap">
+        <label>Mode
+          <select id="upMode">
+            <option value="canvas">Canvas (cepat)</option>
+            <option value="ai">AI ESRGAN</option>
+          </select>
+        </label>
+        <label>Skala
+          <select id="upScale">
+            <option value="2">2x</option>
+            <option value="4">4x</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="upSharpen" checked> Sharpening ringan (mode canvas)</label>
+      </div>
+      <button type="button" class="btn btn-primary" id="upApply">Terapkan Upscale</button>
+      <p class="hint" id="upStatus"></p>
+      <p class="hint" id="upInfo"></p>
+    </section>
+
+    <section class="card tool-panel" id="panel-svg" hidden>
+      <h3>SVG ke PNG/JPG/WebP</h3>
+      <p class="hint">Ubah file SVG menjadi gambar raster. Kalau SVG tidak punya lebar dan tinggi, lebar output di bawah yang dipakai, dan tinggi mengikuti aspek dari viewBox.</p>
+      <label>Pilih file SVG <input type="file" id="svgInput" accept=".svg,image/svg+xml"></label>
+      <label>Lebar output (px) <input type="number" id="svgWidth" min="16" max="8000" value="1024"></label>
+      <label>Format output
+        <select id="svgFormat">
+          <option value="png">PNG</option>
+          <option value="jpeg">JPG</option>
+          <option value="webp">WebP</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-primary" id="svgConvert">Convert SVG</button>
+      <p class="hint" id="svgStatus"></p>
+    </section>
+
+    <section class="card tool-panel" id="panel-eps" hidden>
+      <h3>EPS ke PNG/JPG</h3>
+      <p class="hint">File EPS, AI, dan PSD dibuka lewat Photopea yang berjalan di browsermu. Photopea butuh internet untuk memuat aplikasinya, tapi file diproses di perangkatmu dan tidak di-upload ke server.</p>
+      <label>Pilih file EPS, AI, atau PSD <input type="file" id="epsInput" accept=".eps,.ai,.psd,.ps"></label>
+      <div class="row wrap gap">
+        <label>Format hasil
+          <select id="epsFormat">
+            <option value="png">PNG</option>
+            <option value="jpeg">JPG</option>
+          </select>
+        </label>
+        <label>Lebar hasil (px, kosongkan untuk ukuran asli) <input type="number" id="epsWidth" min="16" max="8000" placeholder="contoh: 2000"></label>
+      </div>
+      <button type="button" class="btn btn-primary" id="epsConvert">Convert dengan Photopea</button>
+      <p class="hint" id="epsStatus"></p>
+      <p class="hint">Catatan: ukuran hasil mengikuti rasterisasi Photopea saat membuka file. Kalau diisi, lebar hasil diatur setelah file dibuka, tinggi mengikuti aspek aslinya.</p>
+    </section>
+
+    <section class="card tool-panel" id="panel-photopea" hidden>
+      <h3>Edit di Photopea</h3>
+      <p class="hint">Kirim gambar aktif ke editor Photopea, edit langsung di sana, lalu ambil hasilnya kembali ke sini. Photopea butuh internet untuk memuat aplikasinya.</p>
+      <p class="hint">Catatan privasi: tool lain di halaman ini memproses file sepenuhnya lokal tanpa pihak ketiga. Jalur Photopea memuat aplikasi Photopea dari photopea.com dan file diproses oleh kode Photopea di browsermu (tetap di perangkat, tidak di-upload ke server).</p>
+      <div class="row wrap gap">
+        <button type="button" class="btn btn-primary" id="ppSend">Kirim Gambar Aktif ke Photopea</button>
+        <button type="button" class="btn" id="ppFetch">Ambil Hasil dari Photopea</button>
+      </div>
+      <p class="hint" id="ppStatus"></p>
+      <iframe id="ppFrame" class="pp-frame" title="Editor Photopea"></iframe>
+    </section>
+  </div>
+
+  <section class="card" id="a4PreviewWrap" hidden>
+    <h2>Pratinjau Laporan A4</h2>
+    <div id="a4Preview" class="a4-page"></div>
+  </section>
+
+  <p class="status" id="status" role="status"></p>
+</main>
+
+<footer class="site-footer">
+  <p>Tools Gambar. Semua proses jalan di browser kamu, file tidak pernah di-upload ke server mana pun.</p>
+  <p>Library: JSZip, heic2any, qrcodejs, dan @imgly/background-removal, semuanya dimuat dari CDN. Convert EPS dan edit lanjutan memakai Photopea (photopea.com).</p>
+</footer>
+
+<script src="photopea.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
