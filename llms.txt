@@ -1,0 +1,32 @@
+# Image Tools
+
+Image Tools is a free set of image tools that runs entirely in your browser at https://tools.atur.in/. No uploads, no sign-up, no installation.
+
+## Tools (22)
+
+- Compress: shrink JPG, WebP, and PNG files, with a target size in KB
+- Resize: change dimensions in pixels or percent, with aspect ratio lock
+- Upscale: raise resolution 2x or 4x, canvas mode or AI ESRGAN mode
+- Convert: change image format between JPG, PNG, and WebP
+- SVG to PNG: rasterize SVG files to PNG, JPG, or WebP
+- Crop: drag a box over the preview, with 1:1, 4:3, and 16:9 presets
+- Rotate: rotate 90, 180, or 270 degrees, flip horizontal or vertical
+- Watermark: add text with position, size, opacity, and color
+- Censor: cover areas with a black box, pixelate, or blur
+- Remove Background: on-device AI background removal, transparent PNG result
+- HEIC to JPG: convert iPhone HEIC photos to JPG
+- EPS to PNG: convert EPS, AI, and PSD files through Photopea
+- Edit in Photopea: send the active image to the Photopea editor and get the result back
+- Passport Photo: crop to 2x3, 3x4, or 4x6 cm at 300 dpi, plus 4R print sheets
+- Change Passport Photo Background: remove the background with AI and place the photo on a solid color
+- QR Code: generate QR codes for text, links, or WhatsApp
+- Merge Images: combine images vertically, horizontally, or in a grid
+- Social Media Sizes: presets for Instagram, TikTok, YouTube, WhatsApp, and Facebook
+- Remove Metadata: re-save the image to strip EXIF, GPS, and camera info
+- Favicon: generate 16, 32, and 48 px PNGs plus favicon.ico as a ZIP
+- Transparent Signature: turn a signature photo on white paper into a transparent PNG
+- A4 Photo Report: arrange photos with a title and captions on an A4 page for printing or PDF
+
+## Privacy
+
+Everything runs client-side in the browser. Files never leave the device, except for the Photopea paths (EPS conversion and the Photopea editor), which load the Photopea app from photopea.com but still process files in the browser.
