@@ -1,5 +1,5 @@
 'use strict';
-/* Tools Gambar - semua proses jalan di browser, file tidak pernah di-upload. */
+/* Image Tools - everything runs in the browser, files are never uploaded. */
 
 const $ = (id) => document.getElementById(id);
 let uid = 0;
@@ -20,13 +20,13 @@ const state = {
 };
 
 const TOOL_LABELS = {
-  compress: 'Kompres', resize: 'Resize', upscale: 'Upscale', convert: 'Convert',
-  svg: 'SVG ke PNG', crop: 'Crop', rotate: 'Rotate', watermark: 'Watermark',
-  sensor: 'Sensor', bgremove: 'Hapus Background', heic: 'HEIC ke JPG',
-  eps: 'EPS ke PNG', photopea: 'Edit di Photopea', pasfoto: 'Pas Foto', bgfoto: 'Ganti Background Pas Foto',
-  qr: 'QR Code', merge: 'Gabung Gambar', sosmed: 'Ukuran Sosmed',
-  metadata: 'Hapus Metadata', favicon: 'Favicon', signature: 'Tanda Tangan Transparan',
-  a4: 'Laporan Foto A4',
+  compress: 'Compress', resize: 'Resize', upscale: 'Upscale', convert: 'Convert',
+  svg: 'SVG to PNG', crop: 'Crop', rotate: 'Rotate', watermark: 'Watermark',
+  sensor: 'Censor', bgremove: 'Remove Background', heic: 'HEIC to JPG',
+  eps: 'EPS to PNG', photopea: 'Edit in Photopea', pasfoto: 'Passport Photo', bgfoto: 'Change Passport Photo Background',
+  qr: 'QR Code', merge: 'Merge Images', sosmed: 'Social Media Sizes',
+  metadata: 'Remove Metadata', favicon: 'Favicon', signature: 'Transparent Signature',
+  a4: 'A4 Photo Report',
 };
 
 /* ---------- util ---------- */
@@ -42,7 +42,7 @@ function showStatus(msg, type) {
   el.className = 'status' + (type ? ' ' + type : '');
 }
 function extFor(format) { return format === 'jpeg' ? 'jpg' : format; }
-function baseName(name) { return (name || 'gambar').replace(/\.[^.]+$/, ''); }
+function baseName(name) { return (name || 'image').replace(/\.[^.]+$/, ''); }
 function copyCanvas(src) {
   const c = document.createElement('canvas');
   c.width = src.width; c.height = src.height;
@@ -63,7 +63,7 @@ function canvasToBlob(canvas, format, quality) {
     const src = format === 'jpeg' ? flattenCanvas(canvas) : canvas;
     src.toBlob((b) => {
       if (b) resolve(b);
-      else reject(new Error('gagal membuat file.'));
+      else reject(new Error('failed to create the file.'));
     }, type, format === 'png' ? undefined : quality);
   });
 }
@@ -73,7 +73,7 @@ function loadImage(blob) {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('file gambar tidak bisa dibaca.')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('the image file could not be read.')); };
     img.src = url;
   });
 }
@@ -108,7 +108,7 @@ function svgToBlob(text, targetWidth) {
   return new Blob([out], { type: 'image/svg+xml' });
 }
 
-/* ---------- file masuk ---------- */
+/* ---------- incoming files ---------- */
 function activeEntry() {
   return state.files.find((f) => f.id === state.activeId) || null;
 }
@@ -121,10 +121,10 @@ function makeEntry(name, blob, img) {
   };
 }
 async function fileToEntry(file) {
-  const name = file.name || 'gambar';
+  const name = file.name || 'image';
   const lower = name.toLowerCase();
   if (/\.(heic|heif)$/.test(lower) || file.type === 'image/heic' || file.type === 'image/heif') {
-    if (typeof heic2any === 'undefined') throw new Error('library HEIC belum termuat, periksa koneksi internet lalu muat ulang halaman.');
+    if (typeof heic2any === 'undefined') throw new Error('the HEIC library has not loaded yet. Check your internet connection, then reload the page.');
     const out = await heic2any({ blob: file, toType: 'image/png' });
     const blob = Array.isArray(out) ? out[0] : out;
     const img = await loadImage(blob);
@@ -136,7 +136,7 @@ async function fileToEntry(file) {
     const img = await loadImage(blob);
     return makeEntry(name, blob, img);
   }
-  if (!file.type || !file.type.startsWith('image/')) throw new Error('bukan file gambar.');
+  if (!file.type || !file.type.startsWith('image/')) throw new Error('not an image file.');
   const img = await loadImage(file);
   return makeEntry(name, file, img);
 }
@@ -148,7 +148,7 @@ async function addFiles(list) {
       const entry = await fileToEntry(file);
       if (entry) state.files.push(entry);
     } catch (err) {
-      showStatus('Gagal memuat ' + file.name + ': ' + (err && err.message ? err.message : 'file tidak didukung.'), 'err');
+      showStatus('Failed to load ' + file.name + ': ' + (err && err.message ? err.message : 'file not supported.'), 'err');
     }
   }
   renderFileList();
@@ -169,7 +169,7 @@ function renderFileList() {
     label.textContent = f.name + ' (' + f.width + 'x' + f.height + ')';
     const rm = document.createElement('button');
     rm.type = 'button'; rm.className = 'rm'; rm.textContent = 'x';
-    rm.title = 'Hapus file ini';
+    rm.title = 'Remove this file';
     rm.addEventListener('click', (ev) => { ev.stopPropagation(); removeFile(f.id); });
     chip.appendChild(thumb); chip.appendChild(label); chip.appendChild(rm);
     chip.addEventListener('click', () => setActive(f.id));
@@ -220,7 +220,7 @@ function setActive(id) {
 }
 function resetToOriginal() {
   const entry = activeEntry();
-  if (!entry) { showStatus('Belum ada gambar.', 'err'); return; }
+  if (!entry) { showStatus('No image yet.', 'err'); return; }
   state.work.width = state.orig.width;
   state.work.height = state.orig.height;
   state.work.getContext('2d').drawImage(state.orig, 0, 0);
@@ -229,23 +229,23 @@ function resetToOriginal() {
   renderOverlay();
   syncResizeInputs();
   updatePreview();
-  showStatus('Gambar dikembalikan ke aslinya.', 'ok');
+  showStatus('Image restored to its original.', 'ok');
 }
 
-/* ---------- pratinjau ---------- */
+/* ---------- preview ---------- */
 let infoToken = 0;
 async function updateInfo() {
   const token = ++infoToken;
   const entry = activeEntry();
   if (!state.work.width) { $('imgInfo').textContent = ''; return; }
-  const base = 'Ukuran: ' + state.work.width + ' x ' + state.work.height + ' px'
-    + (entry ? ' | File asli: ' + fmtBytes(entry.size) : '');
-  $('imgInfo').textContent = base + ' | Hasil: menghitung...';
+  const base = 'Size: ' + state.work.width + ' x ' + state.work.height + ' px'
+    + (entry ? ' | Original file: ' + fmtBytes(entry.size) : '');
+  $('imgInfo').textContent = base + ' | Result: calculating...';
   try {
     const blob = await workToBlob($('dlFormat').value, Number($('dlQuality').value) / 100);
     if (token !== infoToken) return;
-    $('imgInfo').textContent = base + ' | Hasil: ' + fmtBytes(blob.size) + ' (' + $('dlFormat').value.toUpperCase() + ')';
-  } catch (e) { /* abaikan, info tetap tampil tanpa ukuran hasil */ }
+    $('imgInfo').textContent = base + ' | Result: ' + fmtBytes(blob.size) + ' (' + $('dlFormat').value.toUpperCase() + ')';
+  } catch (e) { /* ignore, info still shows without the result size */ }
 }
 function updatePreview() {
   const pv = $('previewCanvas');
@@ -263,18 +263,18 @@ async function reloadWork(blob) {
 }
 async function downloadCurrent() {
   const entry = activeEntry();
-  if (!entry) { showStatus('Belum ada gambar.', 'err'); return; }
+  if (!entry) { showStatus('No image yet.', 'err'); return; }
   try {
     const format = $('dlFormat').value;
     const blob = await workToBlob(format, Number($('dlQuality').value) / 100);
     downloadBlob(blob, baseName(entry.name) + '-hasil.' + extFor(format));
-    showStatus('File berhasil diunduh.', 'ok');
+    showStatus('File downloaded.', 'ok');
   } catch (err) {
-    showStatus('Download gagal: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('Download failed: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 
-/* ---------- overlay crop dan sensor ---------- */
+/* ---------- crop and censor overlay ---------- */
 const overlay = { mode: null, rects: [], drag: null };
 function layerRect() { return $('overlayLayer').getBoundingClientRect(); }
 function pointToImage(ev) {
@@ -311,7 +311,7 @@ function renderOverlay() {
   });
   const count = $('snCount');
   if (count) count.textContent = overlay.mode === 'sensor'
-    ? (overlay.rects.length ? overlay.rects.length + ' kotak sensor dibuat.' : 'Belum ada kotak sensor.')
+    ? (overlay.rects.length ? overlay.rects.length + ' censor boxes created.' : 'No censor boxes yet.')
     : count.textContent;
 }
 function setOverlayMode(mode) {
@@ -400,7 +400,7 @@ function overlayPointerMove(ev) {
 }
 function overlayPointerUp() { overlay.drag = null; }
 
-/* ---------- ganti tool ---------- */
+/* ---------- switch tool ---------- */
 function openTool(name) {
   state.tool = name;
   document.querySelectorAll('.tool-panel').forEach((p) => { p.hidden = true; });
@@ -416,7 +416,7 @@ function openTool(name) {
   if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-/* ---------- transformasi dasar (dipakai tool tunggal dan batch) ---------- */
+/* ---------- basic transforms (used by single tools and batch) ---------- */
 function resizeCanvas(src, w, h) {
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(w));
@@ -492,7 +492,7 @@ async function compressCanvas(canvas, format, quality, targetKb) {
 
 /* ---------- 1. kompres ---------- */
 async function applyCompress() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const format = $('cmpFormat').value;
   const quality = Number($('cmpQuality').value) / 100;
   const target = Number($('cmpTarget').value) || 0;
@@ -502,11 +502,11 @@ async function applyCompress() {
     await reloadWork(blob);
     state.exportFormat = format;
     $('dlFormat').value = format;
-    $('cmpEstimate').textContent = 'Ukuran sebelum: ' + fmtBytes(before) + ', sesudah: ' + fmtBytes(blob.size) + '.'
-      + (target && blob.size > target * 1024 ? ' Target ' + target + ' KB tidak tercapai, sudah memakai kualitas terendah.' : '');
-    showStatus('Kompres selesai, ukuran hasil ' + fmtBytes(blob.size) + '.', 'ok');
+    $('cmpEstimate').textContent = 'Before: ' + fmtBytes(before) + ', after: ' + fmtBytes(blob.size) + '.'
+      + (target && blob.size > target * 1024 ? ' The ' + target + ' KB target was not reached, even at the lowest quality.' : '');
+    showStatus('Compression done, result size ' + fmtBytes(blob.size) + '.', 'ok');
   } catch (err) {
-    showStatus('Kompres gagal: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('Compression failed: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 
@@ -516,12 +516,12 @@ function syncResizeInputs() {
   $('rsHeight').value = state.work.height || '';
 }
 function applyResizeValues(w, h) {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
-  if (!w || !h || w < 1 || h < 1) { showStatus('Isi lebar dan tinggi yang valid.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
+  if (!w || !h || w < 1 || h < 1) { showStatus('Enter a valid width and height.', 'err'); return; }
   state.work = resizeCanvas(state.work, w, h);
   syncResizeInputs();
   updatePreview();
-  showStatus('Resize selesai: ' + state.work.width + ' x ' + state.work.height + ' px.', 'ok');
+  showStatus('Resize done: ' + state.work.width + ' x ' + state.work.height + ' px.', 'ok');
 }
 function onResizeWidthInput() {
   if (!$('rsLock').checked) return;
@@ -538,24 +538,24 @@ function onResizeHeightInput() {
 
 /* ---------- 3. convert ---------- */
 async function applyConvert() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const format = $('cvFormat').value;
   try {
     const blob = await canvasToBlob(state.work, format, 0.92);
     await reloadWork(blob);
     state.exportFormat = format;
     $('dlFormat').value = format;
-    showStatus('Convert selesai ke ' + format.toUpperCase() + ', ukuran ' + fmtBytes(blob.size) + '.', 'ok');
+    showStatus('Converted to ' + format.toUpperCase() + ', size ' + fmtBytes(blob.size) + '.', 'ok');
   } catch (err) {
-    showStatus('Convert gagal: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('Conversion failed: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 
 /* ---------- 4. crop ---------- */
 function applyCrop() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const rc = overlay.rects[0];
-  if (!rc) { showStatus('Buat kotak crop dulu dengan menyeret di atas gambar.', 'err'); return; }
+  if (!rc) { showStatus('Draw a crop box first by dragging over the image.', 'err'); return; }
   const sx = Math.round(rc.x), sy = Math.round(rc.y);
   const sw = Math.round(rc.w), sh = Math.round(rc.h);
   const c = document.createElement('canvas');
@@ -566,28 +566,28 @@ function applyCrop() {
   renderOverlay();
   syncResizeInputs();
   updatePreview();
-  showStatus('Crop selesai: ' + sw + ' x ' + sh + ' px.', 'ok');
+  showStatus('Crop done: ' + sw + ' x ' + sh + ' px.', 'ok');
 }
 
 /* ---------- 5. rotate ---------- */
 function applyRotate(deg) {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   state.work = rotateCanvas(state.work, deg);
   syncResizeInputs();
   updatePreview();
-  showStatus('Gambar diputar ' + deg + ' derajat.', 'ok');
+  showStatus('Image rotated ' + deg + ' degrees.', 'ok');
 }
 function applyFlip(axis) {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   state.work = flipCanvas(state.work, axis);
   updatePreview();
-  showStatus(axis === 'h' ? 'Gambar dicerminkan horizontal.' : 'Gambar dicerminkan vertikal.', 'ok');
+  showStatus(axis === 'h' ? 'Image flipped horizontally.' : 'Image flipped vertically.', 'ok');
 }
 
 /* ---------- 6. watermark ---------- */
 function watermarkSettings() {
   return {
-    text: $('wmText').value.trim() || 'Tools Gambar',
+    text: $('wmText').value.trim() || 'Image Tools',
     pos: $('wmPos').value,
     size: Number($('wmSize').value),
     opacity: Number($('wmOpacity').value) / 100,
@@ -595,16 +595,16 @@ function watermarkSettings() {
   };
 }
 function applyWatermark() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   drawWatermarkOn(state.work, watermarkSettings());
   updatePreview();
-  showStatus('Watermark diterapkan.', 'ok');
+  showStatus('Watermark applied.', 'ok');
 }
 
 /* ---------- 7. sensor ---------- */
 function applySensor() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
-  if (!overlay.rects.length) { showStatus('Buat kotak sensor dulu dengan menyeret di atas gambar.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
+  if (!overlay.rects.length) { showStatus('Draw a censor box first by dragging over the image.', 'err'); return; }
   const mode = $('snMode').value;
   const n = overlay.rects.length;
   const ctx = state.work.getContext('2d');
@@ -636,10 +636,10 @@ function applySensor() {
   overlay.rects = [];
   renderOverlay();
   updatePreview();
-  showStatus('Sensor diterapkan pada ' + n + ' area.', 'ok');
+  showStatus('Censor applied to ' + n + ' areas.', 'ok');
 }
 
-/* ---------- 8 dan 11. hapus background ---------- */
+/* ---------- 8 and 11. remove background ---------- */
 let bgModule = null;
 function setBgStatus(msg) {
   const el = $('bgStatus');
@@ -650,29 +650,29 @@ function setBgStatus(msg) {
 async function removeBgBlob(blob) {
   try {
     if (!bgModule) {
-      setBgStatus('Memuat library AI, mohon tunggu...');
+      setBgStatus('Loading the AI library, please wait...');
       const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
       bgModule = mod.removeBackground
         || (mod.default && mod.default.removeBackground)
         || mod.default;
-      if (typeof bgModule !== 'function') throw new Error('library background removal tidak bisa dimuat.');
+      if (typeof bgModule !== 'function') throw new Error('the background removal library could not be loaded.');
     }
     const out = await bgModule(blob, {
       progress: (key, current, total) => {
-        if (total > 0) setBgStatus('Mengunduh model AI... ' + Math.round((current / total) * 100) + '%');
-        else setBgStatus('Memproses gambar dengan AI...');
+        if (total > 0) setBgStatus('Downloading the AI model... ' + Math.round((current / total) * 100) + '%');
+        else setBgStatus('Processing the image with AI...');
       },
     });
     return out;
   } catch (err) {
-    showStatus('Hapus background gagal: ' + (err && err.message ? err.message : 'model AI tidak bisa dimuat. Periksa koneksi internet lalu coba lagi.'), 'err');
+    showStatus('Background removal failed: ' + (err && err.message ? err.message : 'the AI model could not be loaded. Check your internet connection and try again.'), 'err');
     setBgStatus('');
     return null;
   }
 }
 async function applyBgRemove() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
-  setBgStatus('Menyiapkan gambar...');
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
+  setBgStatus('Preparing the image...');
   const blob = await workToBlob('png', 1);
   const cut = await removeBgBlob(blob);
   if (!cut) return;
@@ -684,11 +684,11 @@ async function applyBgRemove() {
   $('dlFormat').value = 'png';
   setBgStatus('');
   updatePreview();
-  showStatus('Background berhasil dihapus, hasil PNG transparan.', 'ok');
+  showStatus('Background removed, the result is a transparent PNG.', 'ok');
 }
 async function applyBgFoto() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
-  setBgStatus('Menghapus background dengan AI...');
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
+  setBgStatus('Removing the background with AI...');
   const blob = await workToBlob('png', 1);
   const cut = await removeBgBlob(blob);
   if (!cut) return;
@@ -705,24 +705,24 @@ async function applyBgFoto() {
   setBgStatus('');
   syncResizeInputs();
   updatePreview();
-  showStatus('Background diganti dengan warna pilihan.', 'ok');
+  showStatus('Background changed to your chosen color.', 'ok');
 }
 
-/* ---------- 9. HEIC ke JPG ---------- */
+/* ---------- 9. HEIC to JPG ---------- */
 let heicFile = null;
 async function convertHeic() {
   const file = heicFile;
-  if (!file) { $('heicStatus').textContent = 'Pilih file HEIC dulu.'; return; }
+  if (!file) { $('heicStatus').textContent = 'Choose a HEIC file first.'; return; }
   const lower = (file.name || '').toLowerCase();
   if (!(/\.(heic|heif)$/.test(lower) || file.type === 'image/heic' || file.type === 'image/heif')) {
-    $('heicStatus').textContent = 'File ini bukan HEIC. Pilih file .heic atau .heif.';
+    $('heicStatus').textContent = 'This file is not HEIC. Choose a .heic or .heif file.';
     return;
   }
   if (typeof heic2any === 'undefined') {
-    $('heicStatus').textContent = 'Library HEIC belum termuat, periksa koneksi internet lalu muat ulang halaman.';
+    $('heicStatus').textContent = 'The HEIC library has not loaded yet. Check your internet connection, then reload the page.';
     return;
   }
-  $('heicStatus').textContent = 'Mengubah HEIC ke JPG...';
+  $('heicStatus').textContent = 'Converting HEIC to JPG...';
   try {
     const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
     const blob = Array.isArray(out) ? out[0] : out;
@@ -731,16 +731,16 @@ async function convertHeic() {
     state.files.push(entry);
     setActive(entry.id);
     downloadBlob(blob, entry.name);
-    $('heicStatus').textContent = 'HEIC berhasil diubah ke JPG dan diunduh.';
+    $('heicStatus').textContent = 'HEIC converted to JPG and downloaded.';
   } catch (err) {
-    $('heicStatus').textContent = 'Convert HEIC gagal: ' + (err && err.message ? err.message : 'file tidak bisa dibaca.');
+    $('heicStatus').textContent = 'HEIC conversion failed: ' + (err && err.message ? err.message : 'the file could not be read.');
   }
 }
 
-/* ---------- 10. pas foto ---------- */
+/* ---------- 10. passport photo ---------- */
 const PAS_SIZES = { '2x3': [236, 354], '3x4': [354, 472], '4x6': [472, 709] };
 function applyPasFoto() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const size = PAS_SIZES[$('pfSize').value] || PAS_SIZES['4x6'];
   const c = document.createElement('canvas');
   c.width = size[0]; c.height = size[1];
@@ -751,10 +751,10 @@ function applyPasFoto() {
   state.work = c;
   syncResizeInputs();
   updatePreview();
-  showStatus('Pas foto ' + $('pfSize').value + ' cm dibuat (' + size[0] + ' x ' + size[1] + ' px).', 'ok');
+  showStatus('Passport photo ' + $('pfSize').value + ' cm created (' + size[0] + ' x ' + size[1] + ' px).', 'ok');
 }
 function buildSheet4R(mixed) {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const W = 1200, H = 1800, margin = 40, gap = 24;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -788,7 +788,7 @@ function buildSheet4R(mixed) {
   state.work = c;
   syncResizeInputs();
   updatePreview();
-  showStatus('Lembar 4R dibuat berisi ' + count + ' foto (' + (mixed ? 'campuran 2 foto 4x6, 2 foto 3x4, 4 foto 2x3' : 'ukuran ' + $('pfSize').value + ' cm') + '). Download sebagai JPG dari tombol Download Hasil.', 'ok');
+  showStatus('4R sheet created with ' + count + ' photos (' + (mixed ? 'mixed: 2 photos at 4x6, 2 at 3x4, 4 at 2x3' : 'size ' + $('pfSize').value + ' cm') + '). Download it as a JPG with the Download Result button.', 'ok');
 }
 
 /* ---------- 12. QR code ---------- */
@@ -802,11 +802,11 @@ function qrContent() {
 }
 function makeQr() {
   if (typeof QRCode === 'undefined') {
-    showStatus('Library QR belum termuat, periksa koneksi internet lalu muat ulang halaman.', 'err');
+    showStatus('The QR library has not loaded yet. Check your internet connection, then reload the page.', 'err');
     return;
   }
   const text = qrContent();
-  if (!text) { showStatus('Isi QR masih kosong.', 'err'); return; }
+  if (!text) { showStatus('The QR content is still empty.', 'err'); return; }
   const out = $('qrOut');
   out.innerHTML = '';
   const size = Number($('qrSize').value) || 512;
@@ -818,7 +818,7 @@ function makeQr() {
     colorLight: $('qrLight').value,
     correctLevel: QRCode.CorrectLevel.M,
   });
-  showStatus('QR code dibuat.', 'ok');
+  showStatus('QR code created.', 'ok');
 }
 function downloadQr() {
   const out = $('qrOut');
@@ -834,12 +834,12 @@ function downloadQr() {
     document.body.appendChild(a); a.click(); a.remove();
     return;
   }
-  showStatus('Buat QR code dulu.', 'err');
+  showStatus('Create a QR code first.', 'err');
 }
 
-/* ---------- 13. gabung gambar ---------- */
+/* ---------- 13. merge images ---------- */
 async function applyMerge() {
-  if (state.files.length < 2) { showStatus('Butuh minimal 2 gambar untuk digabung.', 'err'); return; }
+  if (state.files.length < 2) { showStatus('You need at least 2 images to merge.', 'err'); return; }
   const dir = $('mgDir').value;
   const gap = Math.max(0, Number($('mgGap').value) || 0);
   const bg = $('mgBg').value;
@@ -893,17 +893,17 @@ async function applyMerge() {
   }
   const blob = await canvasToBlob(c, 'png');
   const img = await loadImage(blob);
-  const entry = makeEntry('gabungan.png', blob, img);
+  const entry = makeEntry('merged.png', blob, img);
   entry.edited = copyCanvas(c);
   state.files.push(entry);
   setActive(entry.id);
-  showStatus('Gambar berhasil digabung (' + W + ' x ' + H + ' px).', 'ok');
+  showStatus('Images merged (' + W + ' x ' + H + ' px).', 'ok');
 }
 
-/* ---------- 14. ukuran sosmed ---------- */
+/* ---------- 14. social media sizes ---------- */
 function applySosmed() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
-  if (!state.smPreset) { showStatus('Pilih preset ukuran dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
+  if (!state.smPreset) { showStatus('Choose a size preset first.', 'err'); return; }
   const tw = state.smPreset.w, th = state.smPreset.h;
   const mode = $('smMode').value;
   const c = document.createElement('canvas');
@@ -922,21 +922,21 @@ function applySosmed() {
   state.work = c;
   syncResizeInputs();
   updatePreview();
-  showStatus('Ukuran diubah ke ' + state.smPreset.label + ' (' + tw + ' x ' + th + ' px).', 'ok');
+  showStatus('Size changed to ' + state.smPreset.label + ' (' + tw + ' x ' + th + ' px).', 'ok');
 }
 
-/* ---------- 15. hapus metadata ---------- */
+/* ---------- 15. remove metadata ---------- */
 async function applyMetadata() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   try {
     const before = (await workToBlob('png', 1)).size;
     const blob = await canvasToBlob(state.work, 'png');
     await reloadWork(blob);
-    $('mdNote').textContent = 'Metadata (EXIF, GPS, info kamera, tanggal) sudah dibuang. Gambar disimpan ulang tanpa metadata. Ukuran sebelum: '
-      + fmtBytes(before) + ', sesudah: ' + fmtBytes(blob.size) + '.';
-    showStatus('Metadata berhasil dihapus.', 'ok');
+    $('mdNote').textContent = 'Metadata (EXIF, GPS, camera info, date) has been removed. The image was re-saved without metadata. Before: '
+      + fmtBytes(before) + ', after: ' + fmtBytes(blob.size) + '.';
+    showStatus('Metadata removed.', 'ok');
   } catch (err) {
-    showStatus('Hapus metadata gagal: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('Removing metadata failed: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 
@@ -968,7 +968,7 @@ function buildIco(pngs) {
   return new Blob([buf], { type: 'image/x-icon' });
 }
 async function buildFavicon() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const s = Math.min(state.work.width, state.work.height);
   const sx = Math.round((state.work.width - s) / 2);
   const sy = Math.round((state.work.height - s) / 2);
@@ -986,14 +986,14 @@ async function buildFavicon() {
   }
   const ico = buildIco(pngs);
   state.faviconBlobs = { pngs, ico };
-  $('fvList').textContent = 'Siap: favicon-16.png, favicon-32.png, favicon-48.png, favicon.ico.';
+  $('fvList').textContent = 'Ready: favicon-16.png, favicon-32.png, favicon-48.png, favicon.ico.';
   $('fvDownload').disabled = false;
-  showStatus('Favicon berhasil dibuat.', 'ok');
+  showStatus('Favicon created.', 'ok');
 }
 async function downloadFaviconZip() {
-  if (!state.faviconBlobs) { showStatus('Buat favicon dulu.', 'err'); return; }
+  if (!state.faviconBlobs) { showStatus('Create a favicon first.', 'err'); return; }
   if (typeof JSZip === 'undefined') {
-    showStatus('Library ZIP belum termuat, periksa koneksi internet lalu muat ulang halaman.', 'err');
+    showStatus('The ZIP library has not loaded yet. Check your internet connection, then reload the page.', 'err');
     return;
   }
   const zip = new JSZip();
@@ -1001,12 +1001,12 @@ async function downloadFaviconZip() {
   zip.file('favicon.ico', state.faviconBlobs.ico);
   const blob = await zip.generateAsync({ type: 'blob' });
   downloadBlob(blob, 'favicon.zip');
-  showStatus('ZIP favicon berhasil diunduh.', 'ok');
+  showStatus('Favicon ZIP downloaded.', 'ok');
 }
 
-/* ---------- 17. tanda tangan transparan ---------- */
+/* ---------- 17. transparent signature ---------- */
 function applySignature() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const threshold = Number($('sgThreshold').value);
   const ctx = state.work.getContext('2d');
   const imgData = ctx.getImageData(0, 0, state.work.width, state.work.height);
@@ -1020,21 +1020,21 @@ function applySignature() {
   state.exportFormat = 'png';
   $('dlFormat').value = 'png';
   updatePreview();
-  showStatus('Tanda tangan transparan dibuat. Download sebagai PNG supaya transparannya tersimpan.', 'ok');
+  showStatus('Transparent signature created. Download it as a PNG so the transparency is kept.', 'ok');
 }
 
-/* ---------- 18. laporan foto A4 ---------- */
+/* ---------- 18. A4 photo report ---------- */
 function renderA4Captions() {
   const wrap = $('a4Captions');
   wrap.innerHTML = '';
   state.files.forEach((f) => {
     const div = document.createElement('div');
     const label = document.createElement('label');
-    label.textContent = 'Caption untuk ' + f.name;
+    label.textContent = 'Caption for ' + f.name;
     const input = document.createElement('input');
     input.type = 'text';
     input.value = f.caption || '';
-    input.placeholder = 'Tulis caption foto ini';
+    input.placeholder = 'Write a caption for this photo';
     input.maxLength = 120;
     input.addEventListener('input', () => { f.caption = input.value; });
     label.appendChild(input);
@@ -1043,11 +1043,11 @@ function renderA4Captions() {
   });
 }
 function buildA4() {
-  if (!state.files.length) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!state.files.length) { showStatus('Choose an image first.', 'err'); return; }
   const prev = $('a4Preview');
   prev.innerHTML = '';
   const title = document.createElement('h1');
-  title.textContent = $('a4Title').value.trim() || 'Laporan Foto';
+  title.textContent = $('a4Title').value.trim() || 'Photo Report';
   prev.appendChild(title);
   state.files.forEach((f) => {
     const fig = document.createElement('figure');
@@ -1062,7 +1062,7 @@ function buildA4() {
   });
   $('a4PreviewWrap').hidden = false;
   $('a4PreviewWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  showStatus('Laporan A4 tersusun. Tekan Print / Simpan PDF untuk mencetak.', 'ok');
+  showStatus('A4 report is ready. Press Print / Save PDF to print it.', 'ok');
 }
 
 /* ---------- upscale ---------- */
@@ -1104,7 +1104,7 @@ function upscaleCanvasMode(scale, sharpen) {
   x.drawImage(src, 0, 0, c.width, c.height);
   if (sharpen) {
     if (c.width * c.height <= 20000000) sharpenCanvas(c, 0.6);
-    else showStatus('Gambar hasil terlalu besar untuk sharpening, langkah itu dilewati.', '');
+    else showStatus('The result image is too large for sharpening, so that step was skipped.', '');
   }
   state.work = c;
 }
@@ -1114,7 +1114,7 @@ function loadScript(src) {
     s.src = src;
     s.async = true;
     s.onload = resolve;
-    s.onerror = () => reject(new Error('gagal memuat ' + src));
+    s.onerror = () => reject(new Error('failed to load ' + src));
     document.head.appendChild(s);
   });
 }
@@ -1122,11 +1122,11 @@ function setUpStatus(msg) { const el = $('upStatus'); if (el) el.textContent = m
 async function upscaleAIMode(scale) {
   const pixels = state.work.width * state.work.height;
   if (pixels > 2000000) {
-    showStatus('Gambar terlalu besar untuk mode AI di perangkat ini (maks sekitar 2 MP). Pakai mode canvas.', 'err');
+    showStatus('This image is too large for AI mode on this device (max about 2 MP). Use canvas mode.', 'err');
     return false;
   }
   try {
-    setUpStatus('Memuat TensorFlow.js dan model ESRGAN, mohon tunggu...');
+    setUpStatus('Loading TensorFlow.js and the ESRGAN model, please wait...');
     if (typeof tf === 'undefined') {
       await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js');
     }
@@ -1138,23 +1138,23 @@ async function upscaleAIMode(scale) {
       await loadScript('https://cdn.jsdelivr.net/npm/upscaler@latest/dist/browser/umd/upscaler.min.js');
     }
     const upscaler = new Upscaler({ model: window[modelGlobal] });
-    setUpStatus('Model AI siap, memproses gambar...');
+    setUpStatus('AI model ready, processing the image...');
     const out = await upscaler.upscale(state.work, {
       output: 'canvas',
-      progress: (p) => { setUpStatus('Memproses dengan AI... ' + Math.round(p * 100) + '%'); },
+      progress: (p) => { setUpStatus('Processing with AI... ' + Math.round(p * 100) + '%'); },
     });
-    if (!out || !out.width) throw new Error('model AI tidak menghasilkan gambar.');
+    if (!out || !out.width) throw new Error('the AI model did not produce an image.');
     state.work = out;
-    setUpStatus('Upscale AI selesai.');
+    setUpStatus('AI upscale done.');
     return true;
   } catch (err) {
-    showStatus('Mode AI gagal: ' + (err && err.message ? err.message : 'model tidak bisa dimuat.'), 'err');
+    showStatus('AI mode failed: ' + (err && err.message ? err.message : 'the model could not be loaded.'), 'err');
     setUpStatus('');
     return false;
   }
 }
 async function applyUpscale() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const scale = Number($('upScale').value) || 2;
   const mode = $('upMode').value;
   const before = state.work.width + ' x ' + state.work.height;
@@ -1163,26 +1163,26 @@ async function applyUpscale() {
     if (ok) {
       syncResizeInputs();
       updatePreview();
-      $('upInfo').textContent = 'Sebelum: ' + before + ' px, sesudah: ' + state.work.width + ' x ' + state.work.height + ' px (mode AI ESRGAN).';
-      showStatus('Upscale AI selesai.', 'ok');
+      $('upInfo').textContent = 'Before: ' + before + ' px, after: ' + state.work.width + ' x ' + state.work.height + ' px (AI ESRGAN mode).';
+      showStatus('AI upscale done.', 'ok');
       return;
     }
-    showStatus('Mode AI gagal dimuat, memakai mode canvas.', 'err');
+    showStatus('AI mode failed to load, using canvas mode.', 'err');
   }
-  setUpStatus('Memproses dengan mode canvas...');
+  setUpStatus('Processing with canvas mode...');
   upscaleCanvasMode(scale, $('upSharpen').checked);
   setUpStatus('');
   syncResizeInputs();
   updatePreview();
-  $('upInfo').textContent = 'Sebelum: ' + before + ' px, sesudah: ' + state.work.width + ' x ' + state.work.height + ' px (mode canvas).';
-  showStatus('Upscale selesai: ' + state.work.width + ' x ' + state.work.height + ' px.', 'ok');
+  $('upInfo').textContent = 'Before: ' + before + ' px, after: ' + state.work.width + ' x ' + state.work.height + ' px (canvas mode).';
+  showStatus('Upscale done: ' + state.work.width + ' x ' + state.work.height + ' px.', 'ok');
 }
 
-/* ---------- SVG ke PNG ---------- */
+/* ---------- SVG to PNG ---------- */
 async function convertSvgFile() {
   const input = $('svgInput');
   const file = input.files && input.files[0];
-  if (!file) { $('svgStatus').textContent = 'Pilih file SVG dulu.'; return; }
+  if (!file) { $('svgStatus').textContent = 'Choose an SVG file first.'; return; }
   const width = Math.max(16, Number($('svgWidth').value) || 1024);
   const format = $('svgFormat').value;
   try {
@@ -1201,10 +1201,10 @@ async function convertSvgFile() {
     setActive(entry.id);
     state.exportFormat = format;
     $('dlFormat').value = format;
-    $('svgStatus').textContent = 'SVG berhasil diubah ke ' + format.toUpperCase() + ', ukuran ' + c.width + ' x ' + c.height + ' px.';
-    showStatus('SVG berhasil di-convert.', 'ok');
+    $('svgStatus').textContent = 'SVG converted to ' + format.toUpperCase() + ', size ' + c.width + ' x ' + c.height + ' px.';
+    showStatus('SVG converted.', 'ok');
   } catch (err) {
-    $('svgStatus').textContent = 'Gagal convert SVG: ' + (err && err.message ? err.message : 'file tidak valid.');
+    $('svgStatus').textContent = 'Failed to convert SVG: ' + (err && err.message ? err.message : 'invalid file.');
   }
 }
 
@@ -1212,23 +1212,23 @@ async function convertSvgFile() {
 let epsFile = null;
 function setEpsStatus(msg) { const el = $('epsStatus'); if (el) el.textContent = msg || ''; }
 async function convertEps() {
-  if (!epsFile) { setEpsStatus('Pilih file EPS, AI, atau PSD dulu.'); return; }
+  if (!epsFile) { setEpsStatus('Choose an EPS, AI, or PSD file first.'); return; }
   const format = $('epsFormat').value;
   const targetWidth = Math.max(0, Number($('epsWidth').value) || 0);
   try {
-    setEpsStatus('Memuat Photopea...');
+    setEpsStatus('Loading Photopea...');
     const bridge = getHiddenPhotopeaBridge();
     await bridge.ready();
-    setEpsStatus('Membuka file di Photopea...');
+    setEpsStatus('Opening the file in Photopea...');
     const buf = await epsFile.arrayBuffer();
     await bridge.openFile(buf);
     if (targetWidth > 0) {
-      setEpsStatus('Mengatur lebar hasil ke ' + targetWidth + ' px...');
+      setEpsStatus('Setting the result width to ' + targetWidth + ' px...');
       await bridge.resizeToWidth(targetWidth);
     }
-    setEpsStatus('Mengekspor ke ' + format.toUpperCase() + '...');
+    setEpsStatus('Exporting to ' + format.toUpperCase() + '...');
     const blob = await bridge.exportImage(format);
-    if (!blob) throw new Error('Photopea tidak mengembalikan file hasil.');
+    if (!blob) throw new Error('Photopea did not return a result file.');
     const img = await loadImage(blob);
     const outName = epsFile.name.replace(/\.(eps|ai|psd|ps)$/i, '') + '.' + (format === 'jpeg' ? 'jpg' : format);
     const entry = makeEntry(outName, blob, img);
@@ -1237,10 +1237,10 @@ async function convertEps() {
     state.exportFormat = format;
     $('dlFormat').value = format;
     setEpsStatus('');
-    showStatus('EPS berhasil diubah ke ' + format.toUpperCase() + ' lewat Photopea.', 'ok');
+    showStatus('EPS converted to ' + format.toUpperCase() + ' through Photopea.', 'ok');
   } catch (err) {
     setEpsStatus('');
-    showStatus('Convert EPS gagal: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('EPS conversion failed: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 
@@ -1252,49 +1252,49 @@ async function ensureEditorBridge() {
   const frame = $('ppFrame');
   if (!frame.getAttribute('src')) frame.setAttribute('src', PHOTOPEA_URL);
   editorBridge = new PhotopeaBridge(frame);
-  setPpStatus('Memuat Photopea, mohon tunggu...');
+  setPpStatus('Loading Photopea, please wait...');
   try {
     await editorBridge.ready();
-    setPpStatus('Photopea siap. Kirim gambar aktif untuk mulai mengedit.');
+    setPpStatus('Photopea is ready. Send the active image to start editing.');
   } catch (err) {
-    setPpStatus('Photopea tidak bisa dimuat. Periksa koneksi internet lalu buka lagi tool ini.');
+    setPpStatus('Photopea could not be loaded. Check your internet connection, then open this tool again.');
     editorBridge = null;
     throw err;
   }
   return editorBridge;
 }
 async function sendActiveToPhotopea() {
-  if (!activeEntry()) { showStatus('Pilih gambar dulu.', 'err'); return; }
+  if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   try {
-    setPpStatus('Memuat Photopea...');
+    setPpStatus('Loading Photopea...');
     const bridge = await ensureEditorBridge();
-    setPpStatus('Mengirim gambar ke Photopea...');
+    setPpStatus('Sending the image to Photopea...');
     const blob = await workToBlob('png', 1);
     await bridge.openFile(await blob.arrayBuffer());
-    setPpStatus('Gambar terkirim. Silakan edit langsung di editor Photopea di atas.');
-    showStatus('Gambar aktif terkirim ke Photopea.', 'ok');
+    setPpStatus('Image sent. Edit it directly in the Photopea editor above.');
+    showStatus('Active image sent to Photopea.', 'ok');
   } catch (err) {
     setPpStatus('');
-    showStatus('Gagal mengirim ke Photopea: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('Failed to send to Photopea: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 async function fetchFromPhotopea() {
-  if (!editorBridge) { setPpStatus('Buka editor Photopea dulu dan kirim gambar.'); return; }
+  if (!editorBridge) { setPpStatus('Open the Photopea editor first and send an image.'); return; }
   try {
-    setPpStatus('Mengambil hasil dari Photopea...');
+    setPpStatus('Getting the result from Photopea...');
     const blob = await editorBridge.exportImage('png');
-    if (!blob) throw new Error('Photopea tidak mengembalikan gambar.');
+    if (!blob) throw new Error('Photopea did not return an image.');
     const img = await loadImage(blob);
-    const entry = makeEntry('photopea-hasil.png', blob, img);
+    const entry = makeEntry('photopea-result.png', blob, img);
     state.files.push(entry);
     setActive(entry.id);
     state.exportFormat = 'png';
     $('dlFormat').value = 'png';
-    setPpStatus('Hasil dari Photopea sudah masuk sebagai gambar aktif.');
-    showStatus('Hasil edit dari Photopea berhasil diambil.', 'ok');
+    setPpStatus('The Photopea result is now the active image.');
+    showStatus('The edited result from Photopea was retrieved.', 'ok');
   } catch (err) {
     setPpStatus('');
-    showStatus('Gagal mengambil hasil: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('Failed to get the result: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 
@@ -1315,12 +1315,12 @@ async function batchTransform(entry, tool) {
     const quality = Number($('cmpQuality').value) / 100;
     const target = Number($('cmpTarget').value) || 0;
     const blob = await compressCanvas(src, format, quality, target);
-    return { blob, name: baseName(entry.name) + '-kompres.' + extFor(format) };
+    return { blob, name: baseName(entry.name) + '-compressed.' + extFor(format) };
   }
   if (tool === 'resize') {
     const w = Number($('rsWidth').value);
     const h = Number($('rsHeight').value);
-    if (!w || !h) throw new Error('isi lebar dan tinggi resize dulu.');
+    if (!w || !h) throw new Error('enter the resize width and height first.');
     const c = resizeCanvas(src, w, h);
     const blob = await canvasToBlob(c, 'png');
     return { blob, name: baseName(entry.name) + '-resize.png' };
@@ -1337,22 +1337,22 @@ async function batchTransform(entry, tool) {
   }
   if (tool === 'metadata') {
     const blob = await canvasToBlob(src, 'png');
-    return { blob, name: baseName(entry.name) + '-bersih.png' };
+    return { blob, name: baseName(entry.name) + '-clean.png' };
   }
-  throw new Error('tool tidak mendukung batch.');
+  throw new Error('this tool does not support batch.');
 }
 async function downloadAllZip() {
-  if (!state.files.length) { showStatus('Belum ada gambar.', 'err'); return; }
+  if (!state.files.length) { showStatus('No image yet.', 'err'); return; }
   if (typeof JSZip === 'undefined') {
-    showStatus('Library ZIP belum termuat, periksa koneksi internet lalu muat ulang halaman.', 'err');
+    showStatus('The ZIP library has not loaded yet. Check your internet connection, then reload the page.', 'err');
     return;
   }
   const supported = ['compress', 'resize', 'convert', 'watermark', 'metadata'];
   if (!supported.includes(state.tool)) {
-    showStatus('Tool ' + toolLabel(state.tool || 'ini') + ' belum mendukung batch. Pilih tool kompres, resize, convert, watermark, atau hapus metadata.', 'err');
+    showStatus('The ' + toolLabel(state.tool || 'this') + ' tool does not support batch yet. Choose compress, resize, convert, watermark, or remove metadata.', 'err');
     return;
   }
-  showStatus('Memproses ' + state.files.length + ' gambar, mohon tunggu...');
+  showStatus('Processing ' + state.files.length + ' images, please wait...');
   try {
     const zip = new JSZip();
     for (const entry of state.files) {
@@ -1360,10 +1360,10 @@ async function downloadAllZip() {
       zip.file(out.name, out.blob);
     }
     const blob = await zip.generateAsync({ type: 'blob' });
-    downloadBlob(blob, 'tools-gambar-batch.zip');
-    showStatus('ZIP berisi ' + state.files.length + ' gambar berhasil dibuat.', 'ok');
+    downloadBlob(blob, 'image-tools-batch.zip');
+    showStatus('ZIP with ' + state.files.length + ' images created.', 'ok');
   } catch (err) {
-    showStatus('Batch gagal: ' + (err && err.message ? err.message : 'terjadi kesalahan.'), 'err');
+    showStatus('Batch failed: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
   }
 }
 
@@ -1407,7 +1407,7 @@ function init() {
   $('rsApply').addEventListener('click', () => applyResizeValues(Number($('rsWidth').value), Number($('rsHeight').value)));
   $('rsApplyPercent').addEventListener('click', () => {
     const p = Number($('rsPercent').value);
-    if (!p || p <= 0) { showStatus('Isi persen yang valid.', 'err'); return; }
+    if (!p || p <= 0) { showStatus('Enter a valid percent.', 'err'); return; }
     applyResizeValues(Math.round(state.work.width * p / 100), Math.round(state.work.height * p / 100));
   });
 
@@ -1442,7 +1442,7 @@ function init() {
 
   $('heicInput').addEventListener('change', (ev) => {
     heicFile = ev.target.files && ev.target.files[0] ? ev.target.files[0] : null;
-    if (heicFile) $('heicStatus').textContent = 'File dipilih: ' + heicFile.name;
+    if (heicFile) $('heicStatus').textContent = 'Selected file: ' + heicFile.name;
   });
   $('heicConvert').addEventListener('click', convertHeic);
 
@@ -1477,7 +1477,7 @@ function init() {
       document.querySelectorAll('.sm-preset').forEach((x) => x.classList.remove('active'));
       b.classList.add('active');
       state.smPreset = { w: Number(b.dataset.w), h: Number(b.dataset.h), label: b.textContent.trim() };
-      $('smSelected').textContent = 'Preset dipilih: ' + state.smPreset.label + '.';
+      $('smSelected').textContent = 'Preset selected: ' + state.smPreset.label + '.';
     });
   });
   $('smMode').addEventListener('change', () => {
@@ -1501,13 +1501,13 @@ function init() {
   $('svgConvert').addEventListener('click', convertSvgFile);
   $('epsInput').addEventListener('change', (ev) => {
     epsFile = ev.target.files && ev.target.files[0] ? ev.target.files[0] : null;
-    if (epsFile) setEpsStatus('File dipilih: ' + epsFile.name + '. Tekan Convert dengan Photopea.');
+    if (epsFile) setEpsStatus('Selected file: ' + epsFile.name + '. Press Convert with Photopea.');
   });
   $('epsConvert').addEventListener('click', convertEps);
 
   $('ppSend').addEventListener('click', sendActiveToPhotopea);
   $('ppFetch').addEventListener('click', fetchFromPhotopea);
 
-  showStatus('Pilih gambar untuk mulai.');
+  showStatus('Choose an image to start.');
 }
 init();

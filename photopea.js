@@ -1,12 +1,13 @@
 'use strict';
 /* Photopea Live Messaging API - https://www.photopea.com/api/live
-   Outer Environment (OE) mengirim data ke iframe Photopea lewat postMessage:
-   String berisi script yang dijalankan Photopea, atau ArrayBuffer berisi file
-   (Photopea mendeteksi tipe file dari signature). Photopea membalas string
-   "done" saat siap menerima perintah dan setiap selesai memproses satu pesan.
-   Untuk mengambil hasil, script memanggil app.activeDocument.saveToOE("png")
-   atau ("jpg"), lalu Photopea mengirim ArrayBuffer hasil diikuti "done".
-   Semua diproses di browser, file tidak di-upload ke server. */
+   The Outer Environment (OE) sends data to the Photopea iframe via postMessage:
+   a string with a script for Photopea to run, or an ArrayBuffer with a file
+   (Photopea detects the file type from its signature). Photopea replies with
+   the string "done" when it is ready to take commands and after finishing
+   each message. To get the result, a script calls
+   app.activeDocument.saveToOE("png") or ("jpg"), then Photopea sends the
+   resulting ArrayBuffer followed by "done".
+   Everything is processed in the browser, files are never uploaded to a server. */
 
 const PHOTOPEA_URL = 'https://www.photopea.com';
 const PHOTOPEA_ORIGINS = ['https://www.photopea.com', 'https://photopea.com'];
@@ -28,7 +29,7 @@ class PhotopeaBridge {
     });
     this.readyTimer = setTimeout(() => {
       if (!this.isReady && this.readyReject) {
-        this.readyReject(new Error('Photopea tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.'));
+        this.readyReject(new Error('Photopea could not be loaded. Check your internet connection, then reload the page.'));
       }
     }, PHOTOPEA_READY_TIMEOUT);
     this.onMessage = this.onMessage.bind(this);
@@ -48,7 +49,7 @@ class PhotopeaBridge {
         }
         this.finishPending(null);
       }
-      // string lain (mis. hasil echo) tidak dipakai di sini
+      // other strings (for example echo results) are not used here
     } else if (data instanceof ArrayBuffer) {
       if (this.pending) this.pending.buffers.push(data);
       else this.extraBuffers.push(data);
@@ -74,7 +75,7 @@ class PhotopeaBridge {
       pending.timer = setTimeout(() => {
         if (this.pending === pending) {
           this.pending = null;
-          reject(new Error('Photopea tidak merespons. Coba muat ulang halaman lalu ulangi.'));
+          reject(new Error('Photopea is not responding. Try reloading the page, then try again.'));
         }
       }, PHOTOPEA_OP_TIMEOUT);
       this.pending = pending;
