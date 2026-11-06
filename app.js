@@ -267,7 +267,7 @@ async function downloadCurrent() {
   try {
     const format = $('dlFormat').value;
     const blob = await workToBlob(format, Number($('dlQuality').value) / 100);
-    downloadBlob(blob, baseName(entry.name) + '-hasil.' + extFor(format));
+    downloadBlob(blob, baseName(entry.name) + '-result.' + extFor(format));
     showStatus('File downloaded.', 'ok');
   } catch (err) {
     showStatus('Download failed: ' + (err && err.message ? err.message : 'an error occurred.'), 'err');
@@ -490,7 +490,7 @@ async function compressCanvas(canvas, format, quality, targetKb) {
   return best;
 }
 
-/* ---------- 1. kompres ---------- */
+/* ---------- 1. compress ---------- */
 async function applyCompress() {
   if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const format = $('cmpFormat').value;
@@ -601,7 +601,7 @@ function applyWatermark() {
   showStatus('Watermark applied.', 'ok');
 }
 
-/* ---------- 7. sensor ---------- */
+/* ---------- 7. censor ---------- */
 function applySensor() {
   if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   if (!overlay.rects.length) { showStatus('Draw a censor box first by dragging over the image.', 'err'); return; }
