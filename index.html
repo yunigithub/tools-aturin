@@ -416,7 +416,7 @@
 
     <section class="card tool-panel" id="panel-upscale" hidden>
       <h3>Upscale Image</h3>
-      <p class="hint">Raise the image resolution 2x or 4x. Canvas mode is fast and always works. AI mode (ESRGAN) is sharper for photos, but it needs to download a model and uses a lot of memory, so it works best for images under 2 MP.</p>
+      <p class="hint">Raise the image resolution 2x or 4x. Canvas mode is fast and always works. AI mode (Real-ESRGAN) is sharper for photos, but the first run downloads the model (about 5 MB) and the AI engine (about 30 MB on CPU, less on WebGPU), then both are cached. It works best for images under 2 MP. WebGPU is fastest; without it the CPU fallback is slower, especially on weak phones.</p>
       <div class="row wrap gap">
         <label>Mode
           <select id="upMode">

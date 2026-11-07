@@ -1108,14 +1108,278 @@ function upscaleCanvasMode(scale, sharpen) {
   }
   state.work = c;
 }
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.async = true;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('failed to load ' + src));
-    document.head.appendChild(s);
+/* ---------- AI upscale: Real-ESRGAN via ONNX Runtime Web ----------
+   The model runs in a Web Worker (WebGPU when available, WASM fallback).
+   The old UpscalerJS / TensorFlow.js path was removed: its model URLs
+   returned 404, so AI mode never ran and fell back to canvas silently. */
+const ORT_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/';
+const ORT_SCRIPT_URL = ORT_CDN + 'ort.all.min.js';
+const ESRGAN_MODEL_ID = 'realesr-general-x4v3';
+const ESRGAN_MODEL_URLS = [
+  'https://huggingface.co/Heliosoph/realesrgan-onnx/resolve/main/realesr-general-x4v3.onnx',
+  'https://www.modelscope.cn/models/ctan0ctan0/realesrgan-onnx/resolve/master/realesr-general-x4v3.onnx?view=false'
+];
+const UPSCALE_WORKER_SRC = `
+importScripts('${ORT_SCRIPT_URL}');
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.wasmPaths = '${ORT_CDN}';
+ort.env.logLevel = 'error';
+var MODEL_SCALE = 4;
+var OVERLAP = 16;
+var TILE = { webgpu: 256, wasm: 192 };
+var session = null;
+var sessionBackend = null;
+function planTiles(width, height, tile, overlap) {
+  var tiles = [];
+  for (var y = 0; y < height; y += tile) {
+    for (var x = 0; x < width; x += tile) {
+      var ow = Math.min(tile, width - x);
+      var oh = Math.min(tile, height - y);
+      var sx = Math.max(0, x - overlap);
+      var sy = Math.max(0, y - overlap);
+      var ex = Math.min(width, x + ow + overlap);
+      var ey = Math.min(height, y + oh + overlap);
+      tiles.push({ sx: sx, sy: sy, sw: ex - sx, sh: ey - sy, ox: x - sx, oy: y - sy, ow: ow, oh: oh, dx: x, dy: y });
+    }
+  }
+  return tiles;
+}
+function loadSession(bytes, backend) {
+  if (session && sessionBackend === backend) return session;
+  var attempt = ort.InferenceSession.create(bytes, { executionProviders: [backend], graphOptimizationLevel: 'all' });
+  attempt.catch(function () { if (session === attempt) session = null; });
+  session = attempt;
+  sessionBackend = backend;
+  return attempt;
+}
+async function sessionFor(bytes, wanted) {
+  if (wanted === 'webgpu') {
+    try { return { model: await loadSession(bytes, 'webgpu'), backend: 'webgpu' }; }
+    catch (err) { /* fall through to the CPU */ }
+  }
+  return { model: await loadSession(bytes, 'wasm'), backend: 'wasm' };
+}
+self.onmessage = async function (event) {
+  var d = event.data;
+  if (!d || d.kind !== 'upscale') return;
+  var id = d.id;
+  var bitmap = d.bitmap;
+  var factor = d.factor;
+  try {
+    var picked = await sessionFor(d.model, d.backend);
+    var model = picked.model;
+    var backend = picked.backend;
+    self.postMessage({ id: id, backend: backend, progress: 0 });
+    var width = bitmap.width;
+    var height = bitmap.height;
+    var source = new OffscreenCanvas(width, height);
+    var sctx = source.getContext('2d', { willReadFrequently: true });
+    if (!sctx) throw new Error('no 2D context in the worker');
+    sctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    var out = new OffscreenCanvas(width * factor, height * factor);
+    var octx = out.getContext('2d');
+    if (!octx) throw new Error('no 2D context for the result');
+    var tiles = planTiles(width, height, TILE[backend], OVERLAP);
+    var inputName = model.inputNames[0];
+    var outputName = model.outputNames[0];
+    for (var i = 0; i < tiles.length; i++) {
+      var t = tiles[i];
+      var read = sctx.getImageData(t.sx, t.sy, t.sw, t.sh);
+      var plane = t.sw * t.sh;
+      var input = new Float32Array(3 * plane);
+      var px = read.data;
+      for (var p = 0; p < plane; p++) {
+        input[p] = px[p * 4] / 255;
+        input[plane + p] = px[p * 4 + 1] / 255;
+        input[2 * plane + p] = px[p * 4 + 2] / 255;
+      }
+      var feed = {};
+      feed[inputName] = new ort.Tensor('float32', input, [1, 3, t.sh, t.sw]);
+      var result = await model.run(feed);
+      var tensor = result[outputName];
+      var data = tensor.data;
+      var oh4 = tensor.dims[2];
+      var ow4 = tensor.dims[3];
+      if (ow4 !== t.sw * MODEL_SCALE || oh4 !== t.sh * MODEL_SCALE) {
+        throw new Error('the model returned ' + ow4 + ' x ' + oh4 + ' for a ' + t.sw + ' x ' + t.sh + ' tile');
+      }
+      var cx = t.ox * MODEL_SCALE;
+      var cy = t.oy * MODEL_SCALE;
+      var cw = t.ow * MODEL_SCALE;
+      var ch = t.oh * MODEL_SCALE;
+      var outPlane = ow4 * oh4;
+      var rgba = new Uint8ClampedArray(cw * ch * 4);
+      for (var y = 0; y < ch; y++) {
+        var row = (cy + y) * ow4 + cx;
+        for (var x = 0; x < cw; x++) {
+          var s = row + x;
+          var dd = (y * cw + x) * 4;
+          rgba[dd] = data[s] * 255 + 0.5;
+          rgba[dd + 1] = data[outPlane + s] * 255 + 0.5;
+          rgba[dd + 2] = data[2 * outPlane + s] * 255 + 0.5;
+          rgba[dd + 3] = 255;
+        }
+      }
+      if (factor === MODEL_SCALE) {
+        octx.putImageData(new ImageData(rgba, cw, ch), t.dx * MODEL_SCALE, t.dy * MODEL_SCALE);
+      } else {
+        var hw = cw / 2;
+        var hh = ch / 2;
+        var half = new Uint8ClampedArray(hw * hh * 4);
+        for (var y2 = 0; y2 < hh; y2++) {
+          for (var x2 = 0; x2 < hw; x2++) {
+            var a = ((2 * y2) * cw + 2 * x2) * 4;
+            var b = a + 4;
+            var c = a + cw * 4;
+            var e = c + 4;
+            var d2 = (y2 * hw + x2) * 4;
+            half[d2] = (rgba[a] + rgba[b] + rgba[c] + rgba[e] + 2) >> 2;
+            half[d2 + 1] = (rgba[a + 1] + rgba[b + 1] + rgba[c + 1] + rgba[e + 1] + 2) >> 2;
+            half[d2 + 2] = (rgba[a + 2] + rgba[b + 2] + rgba[c + 2] + rgba[e + 2] + 2) >> 2;
+            half[d2 + 3] = 255;
+          }
+        }
+        octx.putImageData(new ImageData(half, hw, hh), t.dx * 2, t.dy * 2);
+      }
+      self.postMessage({ id: id, backend: backend, progress: (i + 1) / tiles.length });
+    }
+    var upscaled = out.transferToImageBitmap();
+    self.postMessage({ id: id, ok: true, backend: backend, bitmap: upscaled }, [upscaled]);
+  } catch (err) {
+    self.postMessage({ id: id, ok: false, error: err && err.message ? err.message : 'could not upscale the photo' });
+  }
+};
+`;
+const MODEL_DB_NAME = 'image-tools-models';
+const MODEL_DB_VERSION = 1;
+const MODEL_STORE_NAME = 'models';
+function openModelDB() {
+  return new Promise(function (resolve, reject) {
+    const req = indexedDB.open(MODEL_DB_NAME, MODEL_DB_VERSION);
+    req.onupgradeneeded = function () {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(MODEL_STORE_NAME)) {
+        db.createObjectStore(MODEL_STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error || new Error('could not open the model cache')); };
+  });
+}
+function getCachedModel(id) {
+  return openModelDB().then(function (db) {
+    return new Promise(function (resolve) {
+      const tx = db.transaction(MODEL_STORE_NAME, 'readonly');
+      const req = tx.objectStore(MODEL_STORE_NAME).get(id);
+      req.onsuccess = function () { resolve(req.result ? req.result.data : null); };
+      req.onerror = function () { resolve(null); };
+    });
+  }).catch(function () { return null; });
+}
+function cacheModel(id, data) {
+  return openModelDB().then(function (db) {
+    return new Promise(function (resolve) {
+      const tx = db.transaction(MODEL_STORE_NAME, 'readwrite');
+      const req = tx.objectStore(MODEL_STORE_NAME).put({ id: id, data: data, cachedAt: Date.now() });
+      req.onsuccess = function () { resolve(); };
+      req.onerror = function () { resolve(); };
+    });
+  }).catch(function () { /* caching is best effort */ });
+}
+async function fetchModelBytes(onProgress) {
+  const cached = await getCachedModel(ESRGAN_MODEL_ID);
+  if (cached) return cached;
+  let lastErr = null;
+  for (let i = 0; i < ESRGAN_MODEL_URLS.length; i++) {
+    try {
+      const res = await fetch(ESRGAN_MODEL_URLS[i]);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const total = Number(res.headers.get('content-length')) || 0;
+      if (!res.body || typeof res.body.getReader !== 'function') {
+        const buf0 = await res.arrayBuffer();
+        await cacheModel(ESRGAN_MODEL_ID, buf0);
+        return buf0;
+      }
+      const reader = res.body.getReader();
+      const chunks = [];
+      let received = 0;
+      for (;;) {
+        const part = await reader.read();
+        if (part.done) break;
+        chunks.push(part.value);
+        received += part.value.byteLength;
+        if (total && onProgress) onProgress(received / total);
+      }
+      const out = new Uint8Array(received);
+      let off = 0;
+      for (let j = 0; j < chunks.length; j++) { out.set(chunks[j], off); off += chunks[j].byteLength; }
+      const buf = out.buffer;
+      await cacheModel(ESRGAN_MODEL_ID, buf);
+      return buf;
+    } catch (err) { lastErr = err; }
+  }
+  throw new Error('could not download the AI model' + (lastErr && lastErr.message ? ': ' + lastErr.message : '.'));
+}
+let probedBackend; // undefined = not probed yet
+async function probeUpscaleBackend() {
+  if (probedBackend !== undefined) return probedBackend;
+  if (typeof navigator === 'undefined') return (probedBackend = null);
+  if (navigator.gpu) {
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      probedBackend = adapter ? 'webgpu' : (typeof WebAssembly !== 'undefined' ? 'wasm' : null);
+    } catch (err) {
+      probedBackend = typeof WebAssembly !== 'undefined' ? 'wasm' : null;
+    }
+  } else {
+    probedBackend = typeof WebAssembly !== 'undefined' ? 'wasm' : null;
+  }
+  return probedBackend;
+}
+let upscaleWorker = null;
+let upscaleWorkerUrl = null;
+function getUpscaleWorker() {
+  if (!upscaleWorker) {
+    upscaleWorkerUrl = URL.createObjectURL(new Blob([UPSCALE_WORKER_SRC], { type: 'text/javascript' }));
+    upscaleWorker = new Worker(upscaleWorkerUrl);
+  }
+  return upscaleWorker;
+}
+function disposeUpscaler() {
+  if (upscaleWorker) { upscaleWorker.terminate(); upscaleWorker = null; }
+  if (upscaleWorkerUrl) { URL.revokeObjectURL(upscaleWorkerUrl); upscaleWorkerUrl = null; }
+}
+function runUpscaleWorker(bitmap, modelBytes, factor, backend, onProgress) {
+  const worker = getUpscaleWorker();
+  const id = 'up' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
+  return new Promise(function (resolve, reject) {
+    let timer = null;
+    function fail(msg) {
+      if (timer) clearTimeout(timer);
+      worker.removeEventListener('message', onMessage);
+      reject(new Error(msg));
+    }
+    function arm() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { disposeUpscaler(); fail('the AI upscaler stopped responding'); }, 120000);
+    }
+    function onMessage(event) {
+      const d = event.data;
+      if (!d || d.id !== id) return;
+      if (typeof d.progress === 'number') {
+        arm();
+        if (onProgress) onProgress(d.progress, d.backend);
+        return;
+      }
+      if (timer) clearTimeout(timer);
+      worker.removeEventListener('message', onMessage);
+      if (d.ok) resolve({ bitmap: d.bitmap, backend: d.backend });
+      else reject(new Error(d.error || 'could not upscale the photo'));
+    }
+    arm();
+    worker.addEventListener('message', onMessage);
+    worker.postMessage({ kind: 'upscale', id: id, model: modelBytes, bitmap: bitmap, factor: factor, backend: backend }, [modelBytes, bitmap]);
   });
 }
 function setUpStatus(msg) { const el = $('upStatus'); if (el) el.textContent = msg || ''; }
@@ -1126,56 +1390,63 @@ async function upscaleAIMode(scale) {
     return false;
   }
   try {
-    setUpStatus('Loading TensorFlow.js and the ESRGAN model, please wait...');
-    if (typeof tf === 'undefined') {
-      await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js');
-    }
-    const modelGlobal = scale === 2 ? 'ESRGANMedium2x' : 'ESRGANMedium4x';
-    if (typeof window[modelGlobal] === 'undefined') {
-      await loadScript('https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-medium@latest/dist/umd/' + scale + 'x.min.js');
-    }
-    if (typeof Upscaler === 'undefined') {
-      await loadScript('https://cdn.jsdelivr.net/npm/upscaler@latest/dist/browser/umd/upscaler.min.js');
-    }
-    const upscaler = new Upscaler({ model: window[modelGlobal] });
-    setUpStatus('AI model ready, processing the image...');
-    const out = await upscaler.upscale(state.work, {
-      output: 'canvas',
-      progress: (p) => { setUpStatus('Processing with AI... ' + Math.round(p * 100) + '%'); },
+    const backend = await probeUpscaleBackend();
+    if (!backend) throw new Error('this browser cannot run the AI upscaler (no WebGPU and no WebAssembly).');
+    setUpStatus('Getting the AI model...');
+    const modelBytes = await fetchModelBytes(function (frac) {
+      setUpStatus('Downloading the AI model... ' + Math.round(frac * 100) + '%');
     });
-    if (!out || !out.width) throw new Error('the AI model did not produce an image.');
-    state.work = out;
-    setUpStatus('AI upscale done.');
+    if (backend === 'webgpu') setUpStatus('Starting the AI engine (WebGPU)...');
+    else setUpStatus('Starting the AI engine (first CPU run downloads the runtime, about 30 MB)...');
+    const bitmap = await createImageBitmap(state.work);
+    const result = await runUpscaleWorker(bitmap, modelBytes, scale, backend, function (frac, usedBackend) {
+      setUpStatus('Upscaling with AI (' + (usedBackend === 'webgpu' ? 'WebGPU' : 'CPU') + ')... ' + Math.round(frac * 100) + '%');
+    });
+    const c = document.createElement('canvas');
+    c.width = result.bitmap.width;
+    c.height = result.bitmap.height;
+    c.getContext('2d').drawImage(result.bitmap, 0, 0);
+    result.bitmap.close();
+    state.work = c;
+    setUpStatus('AI upscale done (' + (result.backend === 'webgpu' ? 'WebGPU' : 'CPU') + ').');
     return true;
   } catch (err) {
-    showStatus('AI mode failed: ' + (err && err.message ? err.message : 'the model could not be loaded.'), 'err');
+    showStatus('AI mode failed: ' + (err && err.message ? err.message : 'the model could not be loaded.') + ' Switch to canvas mode to upscale without AI.', 'err');
     setUpStatus('');
     return false;
   }
 }
+let upscaling = false;
 async function applyUpscale() {
+  if (upscaling) return;
   if (!activeEntry()) { showStatus('Choose an image first.', 'err'); return; }
   const scale = Number($('upScale').value) || 2;
   const mode = $('upMode').value;
   const before = state.work.width + ' x ' + state.work.height;
-  if (mode === 'ai') {
-    const ok = await upscaleAIMode(scale);
-    if (ok) {
-      syncResizeInputs();
-      updatePreview();
-      $('upInfo').textContent = 'Before: ' + before + ' px, after: ' + state.work.width + ' x ' + state.work.height + ' px (AI ESRGAN mode).';
-      showStatus('AI upscale done.', 'ok');
+  upscaling = true;
+  $('upApply').disabled = true;
+  try {
+    if (mode === 'ai') {
+      const ok = await upscaleAIMode(scale);
+      if (ok) {
+        syncResizeInputs();
+        updatePreview();
+        $('upInfo').textContent = 'Before: ' + before + ' px, after: ' + state.work.width + ' x ' + state.work.height + ' px (AI Real-ESRGAN mode).';
+        showStatus('AI upscale done.', 'ok');
+      }
       return;
     }
-    showStatus('AI mode failed to load, using canvas mode.', 'err');
+    setUpStatus('Processing with canvas mode...');
+    upscaleCanvasMode(scale, $('upSharpen').checked);
+    setUpStatus('');
+    syncResizeInputs();
+    updatePreview();
+    $('upInfo').textContent = 'Before: ' + before + ' px, after: ' + state.work.width + ' x ' + state.work.height + ' px (canvas mode).';
+    showStatus('Upscale done: ' + state.work.width + ' x ' + state.work.height + ' px.', 'ok');
+  } finally {
+    upscaling = false;
+    $('upApply').disabled = false;
   }
-  setUpStatus('Processing with canvas mode...');
-  upscaleCanvasMode(scale, $('upSharpen').checked);
-  setUpStatus('');
-  syncResizeInputs();
-  updatePreview();
-  $('upInfo').textContent = 'Before: ' + before + ' px, after: ' + state.work.width + ' x ' + state.work.height + ' px (canvas mode).';
-  showStatus('Upscale done: ' + state.work.width + ' x ' + state.work.height + ' px.', 'ok');
 }
 
 /* ---------- SVG to PNG ---------- */
